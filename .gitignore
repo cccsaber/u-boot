@@ -18,6 +18,7 @@
 *.elf
 *.swp
 *.bin
+!board/rockchip/h20plus/firmware/bl31_0x00080000.bin
 *.patch
 *.cfgtmp
 *.img
