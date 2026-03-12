@@ -1,0 +1,188 @@
+name: Build U-Boot Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      board:
+        description: "Select U-Boot board"
+        required: true
+        default: "h20plus"
+        type: choice
+        options:
+          - h20plus
+          - rk3528
+      rkbin_repo:
+        description: "Set rkbin repository"
+        required: false
+        default: "rockchip-linux/rkbin"
+      rkbin_ref:
+        description: "Set rkbin branch/tag/commit"
+        required: false
+        default: "master"
+      release_tag:
+        description: "Release tag (empty => uboot_<board>)"
+        required: false
+        default: ""
+      release_name:
+        description: "Release name (empty => U-Boot <board>)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  TZ: Etc/UTC
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    if: ${{ github.event.repository.owner.id == github.event.sender.id }}
+
+    steps:
+      - name: Checkout U-Boot
+        uses: actions/checkout@v4
+        with:
+          path: u-boot
+
+      - name: Checkout rkbin
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.rkbin_repo }}
+          ref: ${{ inputs.rkbin_ref }}
+          path: rkbin
+
+      - name: Build selected board in Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            -e TZ="${TZ}" \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -w /work/u-boot \
+            ubuntu:20.04 \
+            bash -lc '
+              set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+
+              apt-get update
+              apt-get install -y \
+                bc \
+                bison \
+                build-essential \
+                ca-certificates \
+                curl \
+                device-tree-compiler \
+                file \
+                flex \
+                gcc-aarch64-linux-gnu \
+                git \
+                libssl-dev \
+                python2 \
+                python2-dev \
+                swig \
+                xz-utils
+
+              curl -fsSL https://bootstrap.pypa.io/pip/2.7/get-pip.py -o /tmp/get-pip.py
+              python2 /tmp/get-pip.py
+              python2 -m pip install --no-cache-dir pyelftools
+
+              crlf_count=$(git grep -I -l $'\''\r'\'' -- . | wc -l || true)
+              echo "CRLF files before normalization: ${crlf_count}"
+              git grep -I -l $'\''\r'\'' -- . | while IFS= read -r file; do
+                [ -n "${file}" ] || continue
+                sed -i '\''s/\r$//'\'' "${file}"
+              done
+
+              mkdir -p /work/release/logs
+              ./make.sh CROSS_COMPILE=aarch64-linux-gnu- "${{ inputs.board }}" \
+                2>&1 | tee "/work/release/logs/build-${{ inputs.board }}.log"
+            '
+
+      - name: Prepare release assets
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          board="${{ inputs.board }}"
+          src="${GITHUB_WORKSPACE}/u-boot"
+          out="${GITHUB_WORKSPACE}/release/${board}"
+          tag="${{ inputs.release_tag }}"
+          name="${{ inputs.release_name }}"
+
+          if [ -z "${tag}" ]; then
+            tag="uboot_${board}"
+          fi
+
+          if [ -z "${name}" ]; then
+            name="U-Boot ${board}"
+          fi
+
+          mkdir -p "${out}"
+
+          copy_if_exists() {
+            local src_file="$1"
+            local dst_file="$2"
+            if [ -f "${src_file}" ]; then
+              cp -a "${src_file}" "${dst_file}"
+            fi
+          }
+
+          copy_if_exists "${src}/uboot.img" "${out}/uboot-${board}.img"
+          copy_if_exists "${src}/u-boot.itb" "${out}/u-boot-${board}.itb"
+          copy_if_exists "${src}/u-boot.bin" "${out}/u-boot-${board}.bin"
+          copy_if_exists "${src}/u-boot.dtb" "${out}/u-boot-${board}.dtb"
+          copy_if_exists "${src}/u-boot-nodtb.bin" "${out}/u-boot-${board}-nodtb.bin"
+          copy_if_exists "${src}/idblock.img" "${out}/idblock-${board}.img"
+
+          find "${src}" -maxdepth 1 -type f \
+            \( -name "*loader*.bin" -o -name "trust*.img" -o -name "download*.bin" \) \
+            -exec cp -a {} "${out}/" \;
+
+          copy_if_exists "${GITHUB_WORKSPACE}/release/logs/build-${board}.log" \
+            "${out}/build-${board}.log"
+
+          {
+            echo "board=${board}"
+            echo "u-boot_commit=${GITHUB_SHA}"
+            echo "rkbin_repo=${{ inputs.rkbin_repo }}"
+            echo "rkbin_ref=${{ inputs.rkbin_ref }}"
+            date -u +"built_at=%Y-%m-%dT%H:%M:%SZ"
+          } > "${out}/build-info.txt"
+
+          (
+            cd "${out}"
+            sha256sum * > SHA256SUMS
+          )
+
+          echo "release_tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "release_name=${name}" >> "${GITHUB_OUTPUT}"
+          echo "release_dir=${out}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uboot-${{ inputs.board }}
+          path: ${{ steps.pack.outputs.release_dir }}/*
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Publish GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.pack.outputs.release_tag }}
+          name: ${{ steps.pack.outputs.release_name }}
+          artifacts: ${{ steps.pack.outputs.release_dir }}/*
+          allowUpdates: true
+          removeArtifacts: false
+          replacesArtifacts: true
+          makeLatest: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            - Board: `${{ inputs.board }}`
+            - U-Boot commit: `${{ github.sha }}`
+            - rkbin: `${{ inputs.rkbin_repo }}` @ `${{ inputs.rkbin_ref }}`
+            - Main output: `uboot-${{ inputs.board }}.img`
+            - This release is updated in place when the same tag is rebuilt.

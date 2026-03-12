@@ -43,6 +43,9 @@ fit-dtb.blob
 #
 !.gitignore
 !.mailmap
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 
 #
 # Generated files
