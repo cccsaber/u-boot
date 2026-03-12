@@ -88,12 +88,17 @@ jobs:
               python2 /tmp/get-pip.py
               python2 -m pip install --no-cache-dir --only-binary=:all: pyelftools==0.29
 
-              crlf_count=$(git grep -I -l $'\''\r'\'' -- . | wc -l || true)
+              git config --global --add safe.directory /work/u-boot
+
+              crlf_files="$(git grep -I -l $'\''\r'\'' -- . || true)"
+              crlf_count="$(printf "%s\n" "${crlf_files}" | sed "/^$/d" | wc -l)"
               echo "CRLF files before normalization: ${crlf_count}"
-              git grep -I -l $'\''\r'\'' -- . | while IFS= read -r file; do
-                [ -n "${file}" ] || continue
-                sed -i '\''s/\r$//'\'' "${file}"
-              done
+              if [ -n "${crlf_files}" ]; then
+                printf "%s\n" "${crlf_files}" | while IFS= read -r file; do
+                  [ -n "${file}" ] || continue
+                  sed -i '\''s/\r$//'\'' "${file}"
+                done
+              fi
 
               mkdir -p /work/release/logs
               ./make.sh CROSS_COMPILE=aarch64-linux-gnu- "${{ inputs.board }}" \
