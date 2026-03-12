@@ -1,0 +1,15 @@
+if TARGET_H20PLUS
+
+config SYS_BOARD
+	default "h20plus"
+
+config SYS_VENDOR
+	default "rockchip"
+
+config SYS_CONFIG_NAME
+	default "h20plus"
+
+config BOARD_SPECIFIC_OPTIONS
+	def_bool y
+
+endif

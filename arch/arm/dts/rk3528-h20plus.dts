@@ -1,0 +1,176 @@
+/*
+ * SPDX-License-Identifier:     GPL-2.0+
+ *
+ * Copyright (c) 2026
+ */
+
+/dts-v1/;
+#include "rk3528.dtsi"
+#include "rk3528-u-boot.dtsi"
+#include <dt-bindings/input/input.h>
+
+/ {
+	model = "Rockchip RK3528 H20Plus";
+	compatible = "rockchip,rk3528-h20plus", "rockchip,rk3528";
+
+	aliases {
+		mmc0 = &sdmmc;
+		mmc1 = &sdhci;
+	};
+
+	chosen {
+		stdout-path = "serial0:1500000n8";
+	};
+
+	vcc12v_dcin: vcc12v-dcin {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc12v-dcin";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <12000000>;
+		regulator-max-microvolt = <12000000>;
+		u-boot,dm-spl;
+	};
+
+	vcc5v0_sys: vcc5v0-sys {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_sys";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&vcc12v_dcin>;
+		u-boot,dm-spl;
+	};
+
+	vcc_3v3_s3: vcc-3v3-s3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_3v3_s3";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&vcc5v0_sys>;
+		u-boot,dm-spl;
+	};
+
+	vdd_1v8_s3: vdd-1v8-s3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_1v8_s3";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&vcc5v0_sys>;
+		u-boot,dm-spl;
+	};
+
+	vcc_sd: vcc-sd {
+		compatible = "regulator-fixed";
+		gpio = <&gpio4 1 1>;
+		regulator-name = "vcc_sd";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&vcc_3v3_s3>;
+		u-boot,dm-spl;
+	};
+
+	vccio_sd: vccio-sd {
+		compatible = "regulator-gpio";
+		regulator-name = "vccio_sd";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+		gpios = <&gpio4 14 0>;
+		states = <1800000 0 3300000 1>;
+		vin-supply = <&vcc5v0_sys>;
+		u-boot,dm-spl;
+	};
+
+	adc-keys {
+		compatible = "adc-keys";
+		io-channels = <&saradc 0>;
+		io-channel-names = "buttons";
+		keyup-threshold-microvolt = <1800000>;
+		poll-interval = <100>;
+		u-boot,dm-pre-reloc;
+		status = "okay";
+
+		volumeup-key {
+			u-boot,dm-pre-reloc;
+			linux,code = <KEY_VOLUMEUP>;
+			label = "volume up";
+			press-threshold-microvolt = <1750>;
+		};
+	};
+};
+
+&uart0 {
+	clock-frequency = <24000000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart0m0_xfer>;
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&uart2 {
+	status = "disabled";
+};
+
+&saradc {
+	vref-supply = <&vdd_1v8_s3>;
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&sdhci {
+	bus-width = <8>;
+	no-sd;
+	no-sdio;
+	non-removable;
+	pinctrl-names = "default";
+	pinctrl-0 = <&emmc_clk &emmc_cmd &emmc_strb &emmc_bus8>;
+	/delete-property/ mmc-hs400-1_8v;
+	/delete-property/ mmc-hs400-enhanced-strobe;
+	/delete-property/ fixed-emmc-driver-type;
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&sdmmc {
+	bus-width = <4>;
+	cap-mmc-highspeed;
+	cap-sd-highspeed;
+	disable-wp;
+	supports-sd;
+	sd-uhs-sdr12;
+	sd-uhs-sdr25;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
+	rockchip,default-sample-phase = <90>;
+	vmmc-supply = <&vcc_sd>;
+	vqmmc-supply = <&vccio_sd>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdmmc_clk &sdmmc_cmd &sdmmc_det &sdmmc_bus4>;
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&emmc_bus8 {
+	u-boot,dm-spl;
+};
+
+&emmc_clk {
+	u-boot,dm-spl;
+};
+
+&emmc_cmd {
+	u-boot,dm-spl;
+};
+
+&emmc_strb {
+	u-boot,dm-spl;
+};
+
+&uart0m0_xfer {
+	u-boot,dm-spl;
+};
