@@ -12,4 +12,12 @@ config SYS_CONFIG_NAME
 config BOARD_SPECIFIC_OPTIONS
 	def_bool y
 
+config H20PLUS_FIT_ATF1_OVERRIDE
+	string
+	default "board/rockchip/h20plus/firmware/bl31_0x00080000.bin"
+	help
+	  Board-specific ATF-1 binary used only when packing uboot.img for
+	  H20Plus. This keeps the H20Plus U-Boot DTB while overriding the
+	  first BL31 payload with the known-good board-compatible build.
+
 endif

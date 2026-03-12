@@ -671,9 +671,33 @@ function pack_uboot_itb_image()
 		fi
 	fi
 
+	prepare_h20plus_fit_atf1_override
+
 	./tools/mkimage -f u-boot.its -E u-boot.itb >/dev/null 2>&1
 	echo "pack u-boot.itb okay! Input: ${INI}"
 	echo
+}
+
+function prepare_h20plus_fit_atf1_override()
+{
+	H20PLUS_FIT_ATF1_OVERRIDE=`filt_val "CONFIG_H20PLUS_FIT_ATF1_OVERRIDE" .config`
+
+	if [ -z "${H20PLUS_FIT_ATF1_OVERRIDE}" ]; then
+		return
+	fi
+
+	if [ ! -f ${H20PLUS_FIT_ATF1_OVERRIDE} ]; then
+		echo "ERROR: No ${H20PLUS_FIT_ATF1_OVERRIDE}"
+		exit 1
+	fi
+
+	if [ ! -f bl31_0x00080000.bin ]; then
+		echo "ERROR: No bl31_0x00080000.bin"
+		exit 1
+	fi
+
+	cp ${H20PLUS_FIT_ATF1_OVERRIDE} bl31_0x00080000.bin
+	echo "## Using H20Plus ATF-1 override: ${H20PLUS_FIT_ATF1_OVERRIDE}"
 }
 
 function pack_spl_loader_image()
