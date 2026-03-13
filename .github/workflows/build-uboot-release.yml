@@ -106,6 +106,12 @@ jobs:
               ./make.sh CROSS_COMPILE=aarch64-linux-gnu- "${{ inputs.board }}" \
                 2>&1 | tee "/work/u-boot/.build-logs/build-${{ inputs.board }}.log"
 
+              if [ ! -x tools/mkimage ]; then
+                make tools-only NO_SDL=1 -j"$(nproc)" \
+                  2>&1 | tee -a "/work/u-boot/.build-logs/build-${{ inputs.board }}.log"
+              fi
+              ./tools/mkimage -V >/dev/null
+
               chown -R "${HOST_UID}:${HOST_GID}" /work/u-boot
             '
 
@@ -145,6 +151,7 @@ jobs:
           copy_if_exists "${src}/u-boot.dtb" "${out}/u-boot-${board}.dtb"
           copy_if_exists "${src}/u-boot-nodtb.bin" "${out}/u-boot-${board}-nodtb.bin"
           copy_if_exists "${src}/idblock.img" "${out}/idblock-${board}.img"
+          copy_if_exists "${src}/tools/mkimage" "${out}/mkimage"
 
           find "${src}" -maxdepth 1 -type f \
             \( -name "*loader*.bin" -o -name "trust*.img" -o -name "download*.bin" \) \
@@ -158,6 +165,7 @@ jobs:
             echo "u-boot_commit=${GITHUB_SHA}"
             echo "rkbin_repo=${{ inputs.rkbin_repo }}"
             echo "rkbin_ref=${{ inputs.rkbin_ref }}"
+            echo "host_mkimage=mkimage"
             date -u +"built_at=%Y-%m-%dT%H:%M:%SZ"
           } > "${out}/build-info.txt"
 
@@ -185,7 +193,7 @@ jobs:
           name: ${{ steps.pack.outputs.release_name }}
           artifacts: ${{ steps.pack.outputs.release_dir }}/*
           allowUpdates: true
-          removeArtifacts: false
+          removeArtifacts: true
           replacesArtifacts: true
           makeLatest: false
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -194,4 +202,5 @@ jobs:
             - U-Boot commit: `${{ github.sha }}`
             - rkbin: `${{ inputs.rkbin_repo }}` @ `${{ inputs.rkbin_ref }}`
             - Main output: `uboot.img`
+            - Host tool: `mkimage`
             - This release is updated in place when the same tag is rebuilt.
